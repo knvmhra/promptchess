@@ -1,0 +1,2 @@
+*.venv
+*lichess_data.pkl
