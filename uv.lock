@@ -833,6 +833,7 @@ dependencies = [
     { name = "chess" },
     { name = "dspy" },
     { name = "openai" },
+    { name = "tiktoken" },
 ]
 
 [package.metadata]
@@ -840,6 +841,7 @@ requires-dist = [
     { name = "chess", specifier = ">=1.11.2" },
     { name = "dspy", specifier = ">=2.6.27" },
     { name = "openai", specifier = ">=1.93.0" },
+    { name = "tiktoken", specifier = ">=0.9.0" },
 ]
 
 [[package]]
