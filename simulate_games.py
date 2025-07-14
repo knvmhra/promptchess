@@ -27,7 +27,7 @@ class RandomPlayer(ChessPlayer):
         return "Random"
 
 class DSPyPlayer(ChessPlayer):
-    def __init__(self, predictor_path: str, name: str, max_retries: int) --> None:
+    def __init__(self, predictor_path: str, name: str, max_retries: int):
         self.predictor = dspy.ChainOfThought(ChessPredictor)
         self.predictor.load(predictor_path)
         self._name = name
@@ -119,3 +119,63 @@ class SimpleModelPlayer(ChessPlayer):
         if reasoning:
             return fallback_move, f"All {self.max_retries} attempts incorrect: {failed_attempts}."
         return fallback_move
+
+
+class Arena:
+    def __init__(self, max_games: int, player_1: ChessPlayer, player_2: ChessPlayer):
+        assert(max_games % 2 == 0)
+        self.max_games = max_games
+        self.player_1 = player_1
+        self.player_2 = player_2
+        self.games = []
+        self.results = {player_1.name: 0, 'draw': 0, player_2.name: 0}
+
+    def play_game(self, white: ChessPlayer, black: ChessPlayer, reasoning: bool = False):
+        board = chess.Board()
+        move_history = []
+
+        while not board.is_game_over(claim_draw=True):
+            if board.turn:
+                result = white.get_move(board, reasoning)
+            else:
+                result = black.get_move(board, reasoning)
+
+            if isinstance(result, tuple):
+                move, rationale = result
+            else:
+                move = result
+                rationale = 'Reasoning is false'
+
+            move_history.append({
+                'move': board.san(move),
+                'reasoning': rationale
+            })
+            board.push(move)
+
+        outcome = board.outcome(claim_draw=True)
+        if outcome is None:
+            raise ValueError('Outcome is None but game is over')
+
+        if outcome.winner is None:
+            self.results['draw'] += 1
+        elif outcome.winner == chess.WHITE:
+            self.results[white.name] += 1
+        else:
+            self.results[black.name] += 1
+
+        game_info = {
+            'white': white.name,
+            'black': black.name,
+            'result': outcome.winner,
+            'move_history': move_history
+        }
+        self.games.append(game_info)
+
+    def play_match(self, reasoning: bool = False):
+        for i in range(self.max_games):
+            if i % 2 == 0:
+                white, black = self.player_1, self.player_2
+            else:
+                white, black = self.player_2, self.player_1
+
+            self.play_game(white, black, reasoning)
