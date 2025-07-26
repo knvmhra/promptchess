@@ -1,6 +1,6 @@
 import chess
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Any
 import random
 from model_player import ChessPredictor
 import dspy
@@ -125,9 +125,29 @@ class SimpleModelPlayer(ChessPlayer):
     def name(self) -> str:
         return self.model
 
+
+class HumanPlayer(ChessPlayer):
+    def __init__(self, name):
+        self._name = name
+
+    def get_move(self, board: chess.Board, reasoning: bool = False) -> chess.Move | Tuple[chess.Move, str]:
+        print(stringify_board(board) + '\n')
+        while True:
+            move_str = input('Input move:')
+            try:
+                move = board.parse_san(move_str)
+                if reasoning:
+                    return move, ''
+                return move
+            except ValueError:
+                print(f'Invalid move: {move_str}')
+
+    @property
+    def name(self) -> str:
+        return self._name
+
 class Arena:
     def __init__(self, max_games: int, player_1: ChessPlayer, player_2: ChessPlayer):
-        assert(max_games % 2 == 0)
         self.max_games = max_games
         self.player_1 = player_1
         self.player_2 = player_2
@@ -186,7 +206,7 @@ class Arena:
             self.play_game(white, black, reasoning)
 
 
-def export_to_pgn(game_data: Dict, filename: str, event: str = "LLM Arena", site: str = "Local") -> None:
+def export_to_pgn(game_data: Dict[str, Any], filename: str, event: str = "LLM Arena", site: str = "Local") -> None:
     """
     Export game data to PGN format with reasoning as commentary.
 
@@ -339,3 +359,22 @@ def export_games_to_pgn(games_file: str, output_file: str) -> None:
             formatted_moves = format_pgn_moves(pgn_moves)
             f.write(formatted_moves)
             f.write('\n\n')  # Double newline between games
+
+if __name__ == '__main__':
+    player_1 = SimpleModelPlayer(
+        model= 'gpt-4.1',
+        instructions= 'You are playing a game of chess against a human player. You will be provided a representation of the board alongside some information about the current state of the game. Your task is to provide the best move, so you can win.',
+        max_retries=3
+    )
+
+    player_2 = HumanPlayer('Kanav')
+
+    arena = Arena(
+        max_games = 1,
+        player_1= player_2,
+        player_2= player_1,
+    )
+
+    arena.play_match(reasoning = True)
+
+    export_to_pgn(game_data = arena.games[0], filename= 'test_human_game.pgn')
