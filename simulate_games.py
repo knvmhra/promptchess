@@ -5,8 +5,9 @@ import random
 from model_player import ChessPredictor
 import dspy
 from datagen import stringify_board
-from openai import OpenAI, models
+from openai import OpenAI
 import json
+from datetime import datetime
 
 class ChessPlayer(ABC):
     @abstractmethod
@@ -120,6 +121,9 @@ class SimpleModelPlayer(ChessPlayer):
             return fallback_move, f"All {self.max_retries} attempts incorrect: {failed_attempts}."
         return fallback_move
 
+    @property
+    def name(self) -> str:
+        return self.model
 
 class Arena:
     def __init__(self, max_games: int, player_1: ChessPlayer, player_2: ChessPlayer):
@@ -150,6 +154,7 @@ class Arena:
                 'move': board.san(move),
                 'reasoning': rationale
             })
+
             board.push(move)
 
         outcome = board.outcome(claim_draw=True)
@@ -171,7 +176,7 @@ class Arena:
         }
         self.games.append(game_info)
 
-    def play_match(self, reasoning: bool = False):
+    def play_match(self, reasoning: bool = True):
         for i in range(self.max_games):
             if i % 2 == 0:
                 white, black = self.player_1, self.player_2
@@ -179,3 +184,158 @@ class Arena:
                 white, black = self.player_2, self.player_1
 
             self.play_game(white, black, reasoning)
+
+
+def export_to_pgn(game_data: Dict, filename: str, event: str = "LLM Arena", site: str = "Local") -> None:
+    """
+    Export game data to PGN format with reasoning as commentary.
+
+    Args:
+        game_data: Dict with keys 'white', 'black', 'result', 'move_history'
+        filename: Output PGN filename
+        event: Tournament/event name
+        site: Location where game was played
+
+    Thanks Claude!
+    """
+
+    # Convert result to PGN format
+    result_map = {
+        "white": "1-0",
+        "black": "0-1",
+        "draw": "1/2-1/2",
+        None: "*"
+    }
+    result = result_map.get(game_data.get("result"), "*")
+
+    # Generate headers
+    headers = [
+        f'[Event "{event}"]',
+        f'[Site "{site}"]',
+        f'[Date "{datetime.now().strftime("%Y.%m.%d")}"]',
+        f'[Round "1"]',
+        f'[White "{game_data["white"]}"]',
+        f'[Black "{game_data["black"]}"]',
+        f'[Result "{result}"]',
+        ""  # Empty line after headers
+    ]
+
+    # Process moves
+    move_history = game_data.get("move_history", [])
+    pgn_moves = []
+
+    for i, move_data in enumerate(move_history):
+        move = move_data["move"]
+        reasoning = move_data.get("reasoning", "")
+
+        # Add move number for white moves
+        if i % 2 == 0:
+            move_num = (i // 2) + 1
+            move_text = f"{move_num}. {move}"
+        else:
+            move_text = move
+
+        # Add reasoning as comment if available and not default
+        if reasoning and reasoning != "Reasoning is false":
+            move_text += f" {{{reasoning}}}"
+
+        pgn_moves.append(move_text)
+
+    # Add result at the end
+    pgn_moves.append(result)
+
+    # Format moves with proper line wrapping (80 chars)
+    formatted_moves = format_pgn_moves(pgn_moves)
+
+    # Write to file
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(headers))
+        f.write(formatted_moves)
+        f.write('\n\n')  # Double newline at end
+
+def format_pgn_moves(moves: List[str], line_length: int = 80) -> str:
+    """Format moves with proper line wrapping for PGN."""
+    lines = []
+    current_line = ""
+
+    for move in moves:
+        # Check if adding this move would exceed line length
+        if current_line and len(current_line + " " + move) > line_length:
+            lines.append(current_line)
+            current_line = move
+        else:
+            if current_line:
+                current_line += " " + move
+            else:
+                current_line = move
+
+    # Add the last line
+    if current_line:
+        lines.append(current_line)
+
+    return '\n'.join(lines)
+
+def export_games_to_pgn(games_file: str, output_file: str) -> None:
+    """
+    Export all games from JSON file to a single PGN file.
+
+    Args:
+        games_file: Path to JSON file containing games
+        output_file: Path to output PGN file
+    """
+    with open(games_file, 'r') as f:
+        games = json.load(f)
+
+    with open(output_file, 'w', encoding='utf-8') as f:
+        for i, game in enumerate(games, 1):
+            # Convert result to PGN format
+            result_map = {
+                "white": "1-0",
+                "black": "0-1",
+                "draw": "1/2-1/2",
+                None: "*"
+            }
+            result = result_map.get(game.get("result"), "*")
+
+            # Write headers
+            headers = [
+                f'[Event "LLM Arena"]',
+                f'[Site "Local"]',
+                f'[Date "{datetime.now().strftime("%Y.%m.%d")}"]',
+                f'[Round "{i}"]',
+                f'[White "{game["white"]}"]',
+                f'[Black "{game["black"]}"]',
+                f'[Result "{result}"]',
+                ""
+            ]
+
+            f.write('\n'.join(headers))
+
+            # Process moves
+            move_history = game.get("move_history", [])
+            pgn_moves = []
+
+            for j, move_data in enumerate(move_history):
+                move = move_data["move"]
+                reasoning = move_data.get("reasoning", "")
+
+                # Add move number for white moves
+                if j % 2 == 0:
+                    move_num = (j // 2) + 1
+                    move_text = f"{move_num}. {move}"
+                else:
+                    move_text = move
+
+                # Add reasoning as comment if available and not default
+                if reasoning and reasoning != "Reasoning is false":
+                    move_text += f" {{{reasoning}}}"
+
+                pgn_moves.append(move_text)
+
+            # Add result at the end
+            pgn_moves.append(result)
+
+            # Format and write moves
+            formatted_moves = format_pgn_moves(pgn_moves)
+            f.write(formatted_moves)
+            f.write('\n\n')  # Double newline between games
