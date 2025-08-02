@@ -102,14 +102,14 @@ class AnthropicProvider(ModelProvider):
             'system': instructions,
             'messages': [
                 {'role': 'user', 'content': ''},
-                {'role': 'assistant', 'content': '{'}
-            ]
+            ],
+            'max_tokens': 1030
         }
 
-        user_message = f'{context}\n\nFormat your response as valid JSON matching this schema: '
+        user_message = f'{context}\n\nFormat your response as valid JSON matching this schema. Respond only with JSON: '
 
         if self.config.is_reasoning:
-            kwargs['thinking'] = {'enabled': True, 'budget_tokens': 2000}
+            kwargs['thinking'] = {'type': 'enabled', 'budget_tokens': 1024}
             user_message += json.dumps(CHESS_SCHEMA)
 
         elif self.config.is_COT:
@@ -121,8 +121,12 @@ class AnthropicProvider(ModelProvider):
         kwargs["messages"][0]['content'] = user_message
 
         response = self.client.messages.create(**kwargs)
-        content = '{' + response.content[0].text
-        parsed_response = json.loads(content)
+        text_content = ''
+        for block in response.content:
+            if block.type == 'text':
+                text_content = block.text
+                break
+        parsed_response = json.loads(text_content)
 
         move = parsed_response['chess_move_SAN']
         reasoning = (
