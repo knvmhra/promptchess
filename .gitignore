@@ -2,3 +2,4 @@
 *lichess_data.pkl
 *__pycache__
 *.DS_Store
+*uv.lock
