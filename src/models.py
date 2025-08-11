@@ -30,7 +30,7 @@ class ProviderType(Enum):
     OPENAI = 'OpenAI'
     ANTHROPIC = 'Anthropic'
 
-@dataclass(frozen=True)
+@dataclass
 class ModelConfig:
     provider: ProviderType
     api_name: str
@@ -38,10 +38,15 @@ class ModelConfig:
     is_reasoning: bool
     is_COT: bool
     instructions: str
+    elo: float
 
     def __post_init__(self):
         if self.is_COT and self.is_reasoning:
             raise AssertionError('Models must be reasoning XOR CoT')
+
+    def __hash__(self) -> int:
+        return hash((self.provider.value, self.api_name, self.label, self.is_reasoning, self.is_COT, self.instructions))
+
 
 class ModelProvider(ABC):
     @abstractmethod

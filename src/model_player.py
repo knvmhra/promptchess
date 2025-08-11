@@ -12,7 +12,7 @@ class ModelPlayer():
         self.cfg = config
         self.client = build_provider(config)
 
-    def get_move(self, board: Board, move_history: str) -> Tuple[Move, str]
+    def get_move(self, board: Board, move_history: str) -> Tuple[Move, str]:
         failed_attempts: List[str] = []
 
         for _ in range(self.max_retries):
