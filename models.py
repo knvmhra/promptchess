@@ -36,6 +36,7 @@ class ModelConfig:
     name: str
     is_reasoning: bool
     is_COT: bool
+    instructions: str
 
     def __post_init__(self):
         if self.is_COT and self.is_reasoning:
@@ -51,14 +52,13 @@ class OpenAIProvider(ModelProvider):
     def __init__(self, config: ModelConfig) -> None:
         self.client = OpenAI()
         self.config = config
+        assert (config.provider == ProviderType.OPENAI)
 
     def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
-        instructions = f"{instructions or ''}\n\nThink step by step about the chess position and explain your reasoning before making your move."
-
         kwargs = {
             "model": self.config.name,
             "input": context,
-            "instructions": instructions,
+            "instructions": self.config.instructions,
             "text": {
                 "format": {
                     "type": "json_schema",
@@ -70,7 +70,7 @@ class OpenAIProvider(ModelProvider):
         }
 
         if self.config.is_reasoning:
-            kwargs["reasoning"] = {'effort': 'low'}
+            kwargs["reasoning"] = {'effort': 'medium'}
             kwargs['text']['format']['schema'] = CHESS_SCHEMA
 
         elif self.config.is_COT:
@@ -82,7 +82,7 @@ class OpenAIProvider(ModelProvider):
         response = self.client.responses.create(**kwargs)
         parsed_response = json.loads(response.output_text)
         move = parsed_response['chess_move_SAN']
-        reasoning = parsed_response['reasoning'] if self.config.is_COT else response['reasoning']['summary'] if self.config.is_reasoning else 'None'
+        reasoning = parsed_response['reasoning'] if self.config.is_COT else response.reasoning.summary if self.config.is_reasoning else 'No reasoning'
 
         return move, reasoning
 
@@ -93,13 +93,9 @@ class AnthropicProvider(ModelProvider):
         self.config = config
 
     def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
-        instructions = f"{instructions or ''}\n\nThink step by step about the chess position and explain your reasoning before making your move."
-        schema = {}
-
-
         kwargs = {
             'model': self.config.name,
-            'system': instructions,
+            'system': self.config.instructions,
             'messages': [
                 {'role': 'user', 'content': ''},
             ],
@@ -135,3 +131,11 @@ class AnthropicProvider(ModelProvider):
                 else 'None'
             )
         return move, reasoning
+
+def build_provider(cfg: ModelConfig):
+    if cfg.provider == ProviderType.ANTHROPIC:
+        return AnthropicProvider(cfg)
+    elif cfg.provider == ProviderType.OPENAI:
+        return OpenAIProvider(cfg)
+    else:
+        raise ValueError('Unsupported ProviderTypek')
