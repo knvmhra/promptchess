@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Callable
 from chess import Board, Move
 
 class ModelPlayer():
-    def __init__(self, config: ModelConfig,  max_retries: int, stringifier: Callable[[Board], str], instructions: str):
+    def __init__(self, config: ModelConfig,  max_retries: int, stringifier: Callable[[Board], str]):
         self.max_retries = max_retries
         self.stringifier = stringifier
         self.cfg = config
@@ -15,13 +15,13 @@ class ModelPlayer():
     def get_move(self, board: Board, move_history: str) -> Tuple[Move, str]
         failed_attempts: List[str] = []
 
-        for i in range(self.max_retries):
+        for _ in range(self.max_retries):
             if failed_attempts:
                 ctx = self.stringifier(board) + '\n' + f"\nIllegal moves in this position:\n" + '\n'.join(failed_attempts) + 'Move history: \n' + move_history
             else:
                 ctx = self.stringifier(board) + '\n' + 'Move history: \n' + move_history
 
-            move_str, reasoning_str = self.client.call(context= ctx, instructions=self.cfg.instructions)
+            move_str, reasoning_str = self.client.call(context= ctx)
 
             try:
                 legal_move = board.parse_san(move_str)

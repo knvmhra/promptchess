@@ -45,7 +45,7 @@ class ModelConfig:
 
 class ModelProvider(ABC):
     @abstractmethod
-    def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
+    def call(self, context: str) -> Tuple[str, str]:
         pass
 
 
@@ -55,7 +55,7 @@ class OpenAIProvider(ModelProvider):
         self.config = config
         assert (config.provider == ProviderType.OPENAI)
 
-    def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
+    def call(self, context: str) -> Tuple[str, str]:
         kwargs = {
             "model": self.config.api_name,
             "input": context,
@@ -93,7 +93,7 @@ class AnthropicProvider(ModelProvider):
         self.client = Anthropic()
         self.config = config
 
-    def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
+    def call(self, context: str) -> Tuple[str, str]:
         kwargs = {
             'model': self.config.api_name,
             'system': self.config.instructions,
