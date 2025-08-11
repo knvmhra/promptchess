@@ -30,10 +30,11 @@ class ProviderType(Enum):
     OPENAI = 'OpenAI'
     ANTHROPIC = 'Anthropic'
 
-@dataclass
+@dataclass(frozen=True)
 class ModelConfig:
     provider: ProviderType
-    name: str
+    api_name: str
+    label: str
     is_reasoning: bool
     is_COT: bool
     instructions: str
@@ -56,7 +57,7 @@ class OpenAIProvider(ModelProvider):
 
     def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
         kwargs = {
-            "model": self.config.name,
+            "model": self.config.api_name,
             "input": context,
             "instructions": self.config.instructions,
             "text": {
@@ -94,7 +95,7 @@ class AnthropicProvider(ModelProvider):
 
     def call(self, context: str, instructions: Optional[str]) -> Tuple[str, str]:
         kwargs = {
-            'model': self.config.name,
+            'model': self.config.api_name,
             'system': self.config.instructions,
             'messages': [
                 {'role': 'user', 'content': ''},
