@@ -1,4 +1,4 @@
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Callable
 from model_player import ModelPlayer, ModelConfig
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -8,6 +8,8 @@ import chess.pgn
 import random
 import json
 from itertools import combinations
+
+from models import ProviderType
 
 
 class EloCalculator:
@@ -83,6 +85,7 @@ class League:
             move_history += f"{move_num}. {san} " if board.turn else f"{san} "
 
             board.push(move)
+            print(san + '\n')
 
         if board.is_checkmate():
             game.result = 0.0 if board.turn else 1.0
@@ -138,3 +141,39 @@ class League:
         for i, game in enumerate(self.games):
             with open(dir / f"game_{i+1}.pgn", 'w') as f:
                 print(game.to_pgn(), file=f)
+
+
+if __name__ == '__main__':
+    stringifier: Callable[[chess.Board], str] = lambda x: x.fen()
+
+    INSTRUCTIONS = 'Analyse the chess position and provide the best move'
+
+    gemini_thinking = ModelConfig(
+        provider= ProviderType.GEMINI,
+        api_name= 'gemini-2.5-pro',
+        label= 'gemini-2.5-pro-thinking',
+        is_reasoning= True,
+        instructions= INSTRUCTIONS
+    )
+
+    o3 = ModelConfig(
+        provider= ProviderType.OPENAI,
+        api_name='gpt-5',
+        label='gpt-5',
+        is_reasoning= True,
+        instructions=INSTRUCTIONS
+    )
+
+    opus = ModelConfig(
+        provider = ProviderType.ANTHROPIC,
+        api_name= 'claude-opus-4-1-20250805',
+        label= 'claude-opus-4.1-thinking',
+        instructions= INSTRUCTIONS
+    )
+
+    arena = League(
+        players= [gemini_thinking, o3, opus],
+        stringifier=stringifier
+    )
+
+    arena.run()

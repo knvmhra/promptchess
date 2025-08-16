@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.60.0",
     "chess>=1.11.2",
     "dspy>=2.6.27",
+    "google-genai>=1.29.0",
     "openai>=1.93.0",
     "tiktoken>=0.9.0",
 ]
