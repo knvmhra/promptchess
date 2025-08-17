@@ -172,9 +172,11 @@ class League:
                 api_name=cfg['api_name'],
                 label=cfg['label'],
                 instructions=cfg['instructions'],
-                is_reasoning=cfg.get('is_reasoning', False),
-                is_COT=cfg.get('is_COT', False),
-                elo=cfg.get('elo', 400)
+                is_reasoning=cfg['is_reasoning'],
+                is_COT=cfg['is_COT'],
+                elo=cfg['elo'],
+                max_tokens= cfg['max_tokens'],
+                thinking_effort= cfg['thinking_effort']
             )
             players.append(player)
             player_map[player.label] = player
