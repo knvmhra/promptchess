@@ -128,6 +128,8 @@ class League:
                     white1.elo, black1.elo, game1.result
                 )
                 print(f"  {white1.label} vs. {black1.label}: {['0-1', '1/2-1/2', '1-0'][int(game1.result * 2)]}")
+                self.completed_games.add((white1.label, black1.label))
+                self.save_state()
 
             if (black1.label, white1.label) not in self.completed_games:
                 game2 = self.play_game(black1, white1)
@@ -136,12 +138,12 @@ class League:
                     black1.elo, white1.elo, game2.result
                 )
                 print(f"  {black1.label} vs. {white1.label}: {['0-1', '1/2-1/2', '1-0'][int(game2.result * 2)]}")
+                self.completed_games.add((black1.label, white1.label))
+                self.save_state()
 
         print("\nFinal ELO Rankings:")
         for player in sorted(self.players, key=lambda p: -p.elo):
             print(f"{player.label}: {player.elo:.0f}")
-
-        self.save_configs()
 
     def save_configs(self, path: Path = Path("model_configs.json")):
         with open(path, 'w') as f:
@@ -187,7 +189,7 @@ class League:
 
         return league
 
-    def export_latest_pgn(self, path: Path = Path("pgns")):
+    def export_latest_pgn(self, path: Path = Path("pgn")):
         path.mkdir(exist_ok= True)
         game = self.games[-1]
         game_idx = len(self.games)
