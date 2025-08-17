@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 from abc import ABC, abstractmethod
 from openai import OpenAI
 from anthropic import Anthropic
@@ -61,6 +61,19 @@ class ModelConfig:
 
     def __hash__(self) -> int:
         return hash((self.provider.value, self.api_name, self.is_reasoning, self.is_COT, self.instructions, self.max_tokens))
+
+    def to_dict(self) -> Dict[str, Any]:
+       return {
+           'provider' : self.provider.value,
+           'api_name': self.api_name,
+           'label': self.label,
+           'instructions': self.instructions,
+           'is_reasoning': self.is_reasoning,
+           'is_COT': self.is_COT,
+           'elo': self.elo,
+           'max_tokens': self.max_tokens,
+           'thinking_effort': self.thinking_effort
+       }
 
 
 class ModelProvider(ABC):

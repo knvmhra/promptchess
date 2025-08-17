@@ -1,4 +1,4 @@
-from typing import Tuple, List, Callable
+from typing import Tuple, List, Callable, Set, Dict, Optional
 from model_player import ModelPlayer, ModelConfig
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -59,12 +59,32 @@ class Game:
 
         return pgn
 
+    def to_dict(self) -> dict:
+            return {
+                'white_label': self.white.label,
+                'black_label': self.black.label,
+                'moves': self.moves,
+                'reasonings': self.reasonings,
+                'result': self.result
+            }
+
+    @classmethod
+    def from_dict(cls, data: dict, player_map: dict) -> 'Game':
+        return cls(
+            white=player_map[data['white_label']],
+            black=player_map[data['black_label']],
+            moves=data['moves'],
+            reasonings=data['reasonings'],
+            result=data['result']
+        )
+
 class League:
     def __init__(self, players: List[ModelConfig], max_retries: int = 3, stringifier = None):
         self.players = players
         self.max_retries = max_retries
         self.stringifier = stringifier or (lambda b: f"{b}\nLegal: {', '.join(b.san(m) for m in b.legal_moves)}")
         self.games: List[Game] = []
+        self.completed_games: Set[Tuple[str, str]] = set()
 
     def play_game(self, white: ModelConfig, black: ModelConfig) -> Game:
         board = chess.Board()
@@ -92,21 +112,6 @@ class League:
 
         return game
 
-    def save_configs(self, path: Path = Path("model_configs.json")):
-        configs = []
-        for player in self.players:
-            configs.append({
-                'provider': player.provider.value,
-                'api_name': player.api_name,
-                'label': player.label,
-                'is_reasoning': player.is_reasoning,
-                'is_COT': player.is_COT,
-                'instructions': player.instructions,
-                'elo': player.elo
-            })
-        with open(path, 'w') as f:
-            json.dump(configs, f, indent=2)
-
     def run(self):
         for p1, p2 in combinations(self.players, 2):
             print(f"\n{p1.label} vs {p2.label}")
@@ -116,19 +121,21 @@ class League:
             else:
                 white1, black1 = p2, p1
 
-            game1 = self.play_game(white1, black1)
-            self.games.append(game1)
-            white1.elo, black1.elo = EloCalculator.update_ratings(
-                white1.elo, black1.elo, game1.result
-            )
-            print(f"  {white1.label}-{black1.label}: {['0-1', '1/2-1/2', '1-0'][int(game1.result * 2)]}")
+            if (white1.label, black1.label) not in self.completed_games:
+                game1 = self.play_game(white1, black1)
+                self.games.append(game1)
+                white1.elo, black1.elo = EloCalculator.update_ratings(
+                    white1.elo, black1.elo, game1.result
+                )
+                print(f"  {white1.label} vs. {black1.label}: {['0-1', '1/2-1/2', '1-0'][int(game1.result * 2)]}")
 
-            game2 = self.play_game(black1, white1)
-            self.games.append(game2)
-            black1.elo, white1.elo = EloCalculator.update_ratings(
-                black1.elo, white1.elo, game2.result
-            )
-            print(f"  {black1.label}-{white1.label}: {['0-1', '1/2-1/2', '1-0'][int(game2.result * 2)]}")
+            if (black1.label, white1.label) not in self.completed_games:
+                game2 = self.play_game(black1, white1)
+                self.games.append(game2)
+                black1.elo, white1.elo = EloCalculator.update_ratings(
+                    black1.elo, white1.elo, game2.result
+                )
+                print(f"  {black1.label} vs. {white1.label}: {['0-1', '1/2-1/2', '1-0'][int(game2.result * 2)]}")
 
         print("\nFinal ELO Rankings:")
         for player in sorted(self.players, key=lambda p: -p.elo):
@@ -136,11 +143,56 @@ class League:
 
         self.save_configs()
 
-    def export_pgns(self, dir: Path = Path("pgns")):
-        dir.mkdir(exist_ok=True)
-        for i, game in enumerate(self.games):
-            with open(dir / f"game_{i+1}.pgn", 'w') as f:
-                print(game.to_pgn(), file=f)
+    def save_configs(self, path: Path = Path("model_configs.json")):
+        with open(path, 'w') as f:
+            json.dump([p.to_dict() for p in self.players], f, indent=2)
+
+    def save_state(self, path: Path = Path("league_state.json")):
+            state = {
+                'players': [p.to_dict() for p in self.players],
+                'games': [g.to_dict() for g in self.games],
+                'completed_games': list(self.completed_games),
+                'max_retries' : self.max_retries
+            }
+            with open(path, 'w') as f:
+                json.dump(state, f, indent=2)
+
+    @classmethod
+    def load_state(cls, path: Path = Path("league_state.json"), stringifier: Optional[Callable] = None):
+        with open(path, 'r') as f:
+            state = json.load(f)
+
+        players: List[ModelConfig] = []
+        player_map: Dict[str, ModelConfig] = {}
+        for cfg in state['players']:
+            player = ModelConfig(
+                provider=ProviderType(cfg['provider']),
+                api_name=cfg['api_name'],
+                label=cfg['label'],
+                instructions=cfg['instructions'],
+                is_reasoning=cfg.get('is_reasoning', False),
+                is_COT=cfg.get('is_COT', False),
+                elo=cfg.get('elo', 400)
+            )
+            players.append(player)
+            player_map[player.label] = player
+
+        league = cls(players=players, max_retries=state['max_retries'], stringifier=stringifier)
+
+        for game_data in state['games']:
+            game = Game.from_dict(game_data, player_map)
+            league.games.append(game)
+
+        league.completed_games = {tuple(m) for m in state['completed_games']}
+
+        return league
+
+    def export_latest_pgn(self, path: Path = Path("pgns")):
+        path.mkdir(exist_ok= True)
+        game = self.games[-1]
+        game_idx = len(self.games)
+        with open(path / f"game_{game_idx}.pgn", 'w') as f:
+            print(game.to_pgn(), file=f)
 
 
 if __name__ == '__main__':
